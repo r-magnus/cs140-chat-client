@@ -3,7 +3,7 @@
 
 # Compiler
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -g # TODO: double check
+CFLAGS = -Wall -Wextra -pedantic -g
 
 # Setup
 TARGET = chat
