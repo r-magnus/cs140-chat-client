@@ -1,3 +1,6 @@
+# Chat Client Makefile for CS140
+# @author Ryan Magnuson rmagnuson@westmont.edu
+
 # Compiler
 CC = gcc
 CFLAGS = -Wall -Wextra -pedantic -g # TODO: double check

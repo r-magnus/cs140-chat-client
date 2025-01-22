@@ -1,4 +1,7 @@
-//IMPORTS
+// Chat Client for CS140
+// @author Ryan Magnuson rmagnuson@westmont.edu
+
+// IMPORTS
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
