@@ -104,43 +104,49 @@ int main(void) {
     char server_recv[BUFFER];
 
     while (running) {
-        if (poll(pfds, 1, 100) > 0 && (pfds[0].revents & POLLIN)) {
+        if (poll(pfds, 1, 100) > 0 && (pfds[0].revents & POLLIN)) { // Temporary poll check to continue loop
             memset(server_recv, 0, BUFFER);
             int bytes_received = recv(sockfd, server_recv, BUFFER, 0);
-            if (bytes_received > 0) {
+            if (bytes_received > 0) { // "Got a message? Show it."
                 wprintw(msg_win, "%s", server_recv);
                 wrefresh(msg_win);
-            } else {
+            } else { // Reset
                 wrefresh(msg_win);
                 break;
             }
         }
 
         int ch = wgetch(input_win);
-        if (ch == 3) {  // Ctrl+C
+        if (ch == 3) {  // Ctrl+C (^C) -> Quit
             running = 0;
             break;
-        } else if (ch != ERR) {
-            if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
-                if (input_len > 0) {
+        } else if (ch != ERR) { // "Valid key press?"
+            if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) { // "Some kind of enter entered?"
+                if (input_len > 0) { // "Do we have something to send?"
                     user_input[input_len] = '\n';
                     send(sockfd, user_input, strlen(user_input), 0);
+
+                    // Reset Typing Stuff
                     memset(user_input, 0, BUFFER);
                     input_len = 0;
                     werase(input_win);
                     wrefresh(input_win);
                 }
-            } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
-                if (input_len > 0) {
+            } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) { // Manual backspace implementation
+                if (input_len > 0) { // "Something to delete?"
                     input_len--;
-                    user_input[input_len] = '\0';
+                    user_input[input_len] = '\0'; // "Make it null."
+
+                    // Reset Typing Stuff
                     werase(input_win);
                     mvwprintw(input_win, 0, 0, "%s", user_input);
                     wrefresh(input_win);
                 }
-            } else if (input_len < BUFFER - 2 && ch > 0 && ch < 256) {
+            } else if (input_len < BUFFER - 2 && ch > 0 && ch < 256) { // Otherwise handle characters normally
                 user_input[input_len++] = ch;
                 waddch(input_win, ch);
+
+                // Reset Typing Stuff
                 wrefresh(input_win);
             }
         }
