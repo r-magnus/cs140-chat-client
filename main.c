@@ -1,116 +1,130 @@
-// Chat Client with ncurses UI (Multiplexing Fixed)
+// CS140 Chat Client
+// Ryan Magnuson rmagnuson@westmont.edu
+
+// Library Setup
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+// #include <WinSock2.h> // For Windows dev
 #include <poll.h>
 #include <ncurses.h>
 #include <signal.h>
 
+//  Var Setup
 #define ADDRESS "10.115.12.240"
 #define PORT 49153
 #define BUFFER 1024
 
 int sockfd;
 volatile sig_atomic_t running = 1;
+WINDOW *msg_win, *input_win;
 
-// Handle Ctrl+C (SIGINT)
+// HELPER METHODS //
 void handle_signal(int sig) {
+    // "Did we quit?"
     (void)sig;
     running = 0;
-    close(sockfd);
-    endwin();
-    exit(0);
 }
 
-int main(void) {
-    // Register SIGINT handler
-    signal(SIGINT, handle_signal);
+void cleanup() {
+    // Close the socket if need be
+    if (sockfd > 0) close(sockfd);
+    endwin();
+}
 
-    // Initialize ncurses
+void init_ncurses() {
+    // Initializes everything we need for ncurses... :)
     initscr();
     cbreak();
     noecho();
     raw();
     refresh();
 
-    // Get terminal dimensions
     int rows, cols;
     getmaxyx(stdscr, rows, cols);
 
-    // Create message and input windows
-    WINDOW *msg_win = newwin(rows - 2, cols, 0, 0);
-    WINDOW *input_win = newwin(1, cols, rows - 1, 0);
+    msg_win = newwin(rows - 2, cols, 0, 0);
+    input_win = newwin(1, cols, rows - 1, 0);
     scrollok(msg_win, TRUE);
-
-    wprintw(msg_win, "Connecting to server...\n");
-    wrefresh(msg_win);
-
-    nodelay(input_win, TRUE);  // Make input non-blocking
+    nodelay(input_win, TRUE);
     keypad(input_win, TRUE);
+}
 
-    // Create socket
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
+int create_socket() {
+    // Forms socket connection
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
         perror("socket");
         endwin();
-        return 1;
+        exit(1);
     }
+    return sock;
+}
 
-    // Define server address
-    struct sockaddr_in server;
-    server.sin_family = AF_INET;
-    server.sin_port = htons(PORT);
-    server.sin_addr.s_addr = inet_addr(ADDRESS);
+struct sockaddr_in get_server_address() {
+    // Builds sockaddr_in struct
+    struct sockaddr_in server = {
+        .sin_family = AF_INET,
+        .sin_port = htons(PORT),
+        .sin_addr.s_addr = inet_addr(ADDRESS),
+        .sin_zero = {0}
+    };
+    return server;
+}
 
-    // Connect to server
+void connect_to_server() {
+    // Uses previously defined sockaddr_in to connect to server
+    struct sockaddr_in server = get_server_address();
     if (connect(sockfd, (struct sockaddr *)&server, sizeof(server)) < 0) {
         perror("connect");
         endwin();
-        close(sockfd);
-        return 1;
+        exit(1);
     }
+    wrefresh(msg_win);
+}
 
-    wprintw(msg_win, "Connected!\n");
+// MAIN //
+int main(void) {
+    // Call all of our handy-dandy helpers.
+    signal(SIGINT, handle_signal);
+    atexit(cleanup);
+
+    init_ncurses();
     wrefresh(msg_win);
 
-    // Setup polling for server socket
-    struct pollfd pfds[1];
-    pfds[0].fd = sockfd;
-    pfds[0].events = POLLIN;  // Watch for server messages
+    sockfd = create_socket();
+    connect_to_server();
 
+    // Setup poll
+    struct pollfd pfds[1] = {{ .fd = sockfd, .events = POLLIN }};
     char user_input[BUFFER] = {0};
     int input_len = 0;
     char server_recv[BUFFER];
 
     while (running) {
-        // Poll for server messages (timeout 100ms)
-        int poll_count = poll(pfds, 1, 100);
-
-        if (poll_count > 0 && (pfds[0].revents & POLLIN)) {
+        if (poll(pfds, 1, 100) > 0 && (pfds[0].revents & POLLIN)) {
             memset(server_recv, 0, BUFFER);
             int bytes_received = recv(sockfd, server_recv, BUFFER, 0);
-
             if (bytes_received > 0) {
                 wprintw(msg_win, "%s", server_recv);
                 wrefresh(msg_win);
             } else {
-                wprintw(msg_win, "Server disconnected.\n");
                 wrefresh(msg_win);
                 break;
             }
         }
 
-        // Handle user input
         int ch = wgetch(input_win);
-        if (ch != ERR) {
+        if (ch == 3) {  // Ctrl+C
+            running = 0;
+            break;
+        } else if (ch != ERR) {
             if (ch == '\n' || ch == '\r' || ch == KEY_ENTER) {
                 if (input_len > 0) {
                     user_input[input_len] = '\n';
-                    user_input[input_len + 1] = '\0';
                     send(sockfd, user_input, strlen(user_input), 0);
-
                     memset(user_input, 0, BUFFER);
                     input_len = 0;
                     werase(input_win);
@@ -132,8 +146,5 @@ int main(void) {
         }
     }
 
-    // Clean up
-    endwin();
-    close(sockfd);
     return 0;
 }
